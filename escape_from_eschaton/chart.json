@@ -1,0 +1,21 @@
+{
+  "t_per_blast_move": 10,
+  "asteroids": [
+    {
+      "offset": 0,
+      "t_per_asteroid_cycle": 2
+    },
+    {
+      "offset": 1,
+      "t_per_asteroid_cycle": 3
+    },
+    {
+      "offset": 3,
+      "t_per_asteroid_cycle": 4
+    },
+    {
+      "offset": 1,
+      "t_per_asteroid_cycle": 2
+    }
+  ]
+}

@@ -7,31 +7,32 @@ class Frigate(object):
         self.velocity = 0
 
     def __repr__(self):
-        return "Frigate details are, position: {0}, course: {1} and velocity: {2}".format(self.position, self.course, self.velocity)
+        return "Frigate details are, position: {0}, course: {1} and velocity: {2}".format(self.position, self.course,
+                                                                                          self.velocity)
 
     def update_position(self):
         self.velocity = sum(self.course)
-        self.position += self.velocity * 1
+        self.position += self.velocity
 
     def plan_next_course(self, next_scenario):
         next_asteroid_positions, next_blast_position = next_scenario
-        if not filter(lambda x:x[1] == 0 and x[0] == self.position + self.velocity + 1, next_asteroid_positions):
+        increase = filter(lambda x:x[1] == 0 and x[0] == self.position + self.velocity + 1, next_asteroid_positions)
+        same = filter(lambda x:x[1] == 0 and x[0] == self.position + self.velocity, next_asteroid_positions)
+        decrease = filter(lambda x:x[1] == 0 and x[0] == self.position + self.velocity - 1, next_asteroid_positions)
+        print(increase, same, decrease)
+        if not increase:
             self.course.append(1)
-        elif not filter(lambda x:x[1] == 0 and x[0] == self.position + self.velocity, next_asteroid_positions):
+        elif not same:
             self.course.append(0)
         else:
-            #self.course.append(-1)
             if self.position + self.velocity == -1:
-                print(self.course)
-                raise ValueError("Cannot escape eschaton, Dead")
+                raise ValueError("Cannot escape eschaton, Dead by hitting eschaton")
             elif self.position + self.velocity == next_blast_position:
-                print(self.course)
-                raise ValueError("Cannot escape eschaton, Dead")
-            elif len(filter(lambda x:x[1] == 0 and x[0] == self.position + self.velocity - 1, next_asteroid_positions)) == 0:
+                raise ValueError("Cannot escape eschaton, Dead by blast consumption")
+            elif not decrease:
                 self.course.append(-1)
             else:
-                print(self.course)
-                raise ValueError("Cannot escape eschaton, Dead")
+                raise ValueError("Cannot escape eschaton, Dead because nowhere to go")
 
 
 class Asteroid(object):
@@ -42,7 +43,8 @@ class Asteroid(object):
         self.position = (self.t_per_asteroid_cycle - self.offset) % self.t_per_asteroid_cycle
 
     def __repr__(self):
-        return "Asteroid number {0}, Offset is: {1} and cycle is: {2} current position is: {3}".format(self.field_number, self.offset, self.t_per_asteroid_cycle, self.position)
+        return "Asteroid number {0}, Offset is: {1} and cycle is: {2} current position is: {3}".format(
+            self.field_number, self.offset, self.t_per_asteroid_cycle, self.position)
 
     def update_position(self):
         self.position = (self.position + 1)% self.t_per_asteroid_cycle
@@ -77,7 +79,8 @@ class Eschaton(object):
         self.t_next_blast = self.t_per_blast_move
 
     def __repr__(self):
-        return "Eschaton specs are, time per blast: {0}, blast position: {1}, time for next blast: {2}".format(self.t_per_blast_move, self.blast_position, self.t_next_blast)
+        return "Eschaton specs are, time per blast: {0}, blast position: {1}, time for next blast: {2}".format(
+            self.t_per_blast_move, self.blast_position, self.t_next_blast)
 
     def update_position(self):
         if self.t_next_blast == 0:
@@ -108,8 +111,10 @@ class NavigateEscape(object):
 
     def frigate_destroyed(self):
         possible_hitting_eschaton = self.frigate.position == -1
-        possible_hitting_asteroid = filter(lambda x: x.field_number == self.frigate.position and x.position == 0, self.asteroids.asteroid_ring_members)
-        possible_blast_consumption = self.frigate.position == self.eschaton.blast_position and self.eschaton.t_next_blast == 0
+        possible_hitting_asteroid = filter(lambda x: x.field_number == self.frigate.position and x.position == 0,
+                                           self.asteroids.asteroid_ring_members)
+        possible_blast_consumption = self.frigate.position == self.eschaton.blast_position and \
+                                     self.eschaton.t_next_blast == 0
         if possible_hitting_eschaton or possible_hitting_asteroid or possible_blast_consumption:
             return True
         else:
@@ -129,7 +134,7 @@ class NavigateEscape(object):
             if current_time > 0:
                 self.update_all_positions()
                 print("All positions updated")
-            #print(self.frigate, self.eschaton, self.asteroids.asteroid_ring_members)
+            print(self.frigate, self.eschaton, self.asteroids.asteroid_ring_members)
             #if escaped return course
             if self.has_escaped():
                 print("frigate escaped")
@@ -148,7 +153,7 @@ class NavigateEscape(object):
                 self.frigate.plan_next_course(next_scenario)
 
 def read_chart():
-    chart_file = open('full-chart.json', 'r')
+    chart_file = open('my-chart.json', 'r')
     chart_data = json.loads(chart_file.read())
     chart_file.close()
     return chart_data
@@ -164,7 +169,8 @@ def rejoin_family():
             eschaton = Eschaton(chart_value)
         elif chart_key == 'asteroids':
             for field_number, asteroid_specs in enumerate(chart_value):
-                asteroids.append(Asteroid(asteroid_specs['offset'], asteroid_specs['t_per_asteroid_cycle'], field_number+1))
+                asteroids.append(Asteroid(asteroid_specs['offset'], asteroid_specs['t_per_asteroid_cycle'],
+                                          field_number+1))
         else:
             raise KeyError
     frigate = Frigate()

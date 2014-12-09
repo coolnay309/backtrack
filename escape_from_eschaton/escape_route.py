@@ -1,4 +1,5 @@
 import json
+import copy
 
 class Frigate(object):
     def __init__(self):
@@ -34,13 +35,32 @@ class Frigate(object):
             else:
                 raise ValueError("Cannot escape eschaton, Dead because nowhere to go")
 
+    def simulate(self):
+        course = [1, 1, 0, 0, 1, 1, 1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1, 1, 1, 1, -1, 1, -1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, 1, 1, 1, 1, 1, 1,
+         -1, -1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, 1, 1, 1,
+         1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+         -1, -1, -1,-1]
+
+        print(type(course))
+
+        velocity = sum(course)
+        total = 0
+        location = 0
+        for c in course:
+            total += c
+            location = location + total
+
+        print(location, velocity)
+
+
 
 class Asteroid(object):
     def __init__(self, offset, t_per_asteroid_cycle, field_number):
         self.offset = offset
         self.t_per_asteroid_cycle = t_per_asteroid_cycle
         self.field_number = field_number
-        self.position = (self.t_per_asteroid_cycle - self.offset) % self.t_per_asteroid_cycle
+        self.position = self.offset
 
     def __repr__(self):
         return "Asteroid number {0}, Offset is: {1} and cycle is: {2} current position is: {3}".format(
@@ -100,6 +120,7 @@ class NavigateEscape(object):
         self.frigate = frigate
         self.eschaton = eschaton
         self.asteroids = asteroids
+        self.backtrack = {}
 
     def update_all_positions(self):
         self.frigate.update_position()
@@ -126,34 +147,147 @@ class NavigateEscape(object):
         else:
             return False
 
-    def calculate_course(self):
-        print(self.eschaton.t_per_blast_move * self.asteroids.ring_size())
-        for current_time in xrange(0, self.eschaton.t_per_blast_move * self.asteroids.ring_size()):   
-            print("t = " + str(current_time)) 
-            #At time t update current astroid positions and blast position
-            if current_time > 0:
-                self.update_all_positions()
-                print("All positions updated")
-            print(self.frigate, self.eschaton, self.asteroids.asteroid_ring_members)
-            #if escaped return course
-            if self.has_escaped():
-                print("frigate escaped")
-                return self.frigate.course
-                
-            #elseif dead report dead
-            elif self.frigate_destroyed():
-                print("frigate destroyed")
-                return []
+    def find_escape_route(self):
+        route = self.calculate_course(0)
+        return route
 
-            else:
-                print("calculating next course")
-                #At time t get future astroid and blast positions for t+1
-                next_scenario = self.get_next_positions()
-                #else plan next course action
-                self.frigate.plan_next_course(next_scenario)
+    def calculate_course(self, current_time):
+        #print(self.eschaton.t_per_blast_move * self.asteroids.ring_size())
+        #for current_time in xrange(0, self.eschaton.t_per_blast_move * self.asteroids.ring_size()):
+        print("--------------------------------------------------------------------------------------------------------")
+        print("t = " + str(current_time))
+        print(self.frigate.course)
+        print("current backtrack is: ", self.backtrack)
+        #print("Parameters are: ", eschaton, frigate, asteroids.asteroid_ring_members)
+        #At time t update current astroid positions and blast position
+        if current_time > 0:
+            self.update_all_positions()
+
+        print("All positions updated")
+        #print(self.frigate, self.eschaton, self.asteroids.asteroid_ring_members)
+        #if escaped return course
+        if self.has_escaped():
+            print("frigate escaped")
+            return self.frigate.course
+
+        #elseif dead report dead
+        elif self.frigate_destroyed():
+            print("frigate destroyed")
+            return [-2]
+
+        else:
+            print("calculating next course")
+            #At time t get future astroid and blast positions for t+1
+            next_scenario = self.get_next_positions()
+            #else plan next course action
+            #self.frigate.plan_next_course(next_scenario)
+            next_asteroid_positions, next_blast_position = next_scenario
+            increase = filter(lambda x:x[1] == 0 and x[0] == self.frigate.position + self.frigate.velocity + 1, next_asteroid_positions)
+            same = filter(lambda x:x[1] == 0 and x[0] == self.frigate.position + self.frigate.velocity, next_asteroid_positions)
+            decrease = filter(lambda x:x[1] == 0 and x[0] == self.frigate.position + self.frigate.velocity - 1, next_asteroid_positions)
+
+            f_ring = current_time+1 in self.backtrack.get(self.frigate.position + self.frigate.velocity+1, set())
+            s_ring = current_time+1 in self.backtrack.get(self.frigate.position + self.frigate.velocity, set())
+            t_ring = current_time+1 in self.backtrack.get(self.frigate.position + self.frigate.velocity-1, set())
+            print(increase, same, decrease)
+            if not increase and not f_ring:
+                self.frigate.course.append(1)
+                print("Accelerating: ", self.frigate.position, self.frigate.velocity)
+                ret = self.calculate_course(current_time+1)
+                print("Returned from accelerated next call, current time is: ", current_time)
+                if len(ret) > 1:
+                    return ret
+                elif len(ret) == 1 and ret[0] == -2:
+                    try:
+                        self.backtrack[self.frigate.position+self.frigate.velocity+1].add(current_time + 1)
+                    except KeyError as e:
+                        self.backtrack[self.frigate.position+self.frigate.velocity+1] = set()
+                        self.backtrack[self.frigate.position+self.frigate.velocity+1].add(current_time + 1)
+            if not same and not s_ring:
+                #restore
+                print("restoring")
+                #print("Restore Parameters are: ", eschaton, frigate, asteroids.asteroid_ring_members)
+                self.frigate.course = self.frigate.course[:current_time]
+                total = 0
+                location = 0
+                for c in self.frigate.course:
+                    total += c
+                    location = location + total
+                self.frigate.position = location
+                self.frigate.velocity = sum(self.frigate.course)
+
+                for id, asteroid in enumerate(self.asteroids.asteroid_ring_members):
+                    asteroid.position = (asteroid.offset + current_time) % asteroid.t_per_asteroid_cycle
+
+                self.eschaton.blast_position = current_time / self.eschaton.t_per_blast_move
+                self.eschaton.t_next_blast = self.eschaton.t_per_blast_move - current_time% self.eschaton.t_per_blast_move
+
+                #if current_time > 0:
+                    #self.update_all_positions()
+                    #print("All positions updated after restore")
+                #print(self.frigate, self.eschaton, self.asteroids.asteroid_ring_members)
+
+                self.frigate.course.append(0)
+                print("Maintain speed: ", self.frigate.position, self.frigate.velocity)
+                ret = self.calculate_course(current_time+1)
+                if len(ret) > 1:
+                    return ret
+                elif len(ret) == 1 and ret[0] == -2:
+                    try:
+
+                        self.backtrack[self.frigate.position+self.frigate.velocity].add(current_time + 1)
+                    except KeyError as e:
+                        self.backtrack[self.frigate.position+self.frigate.velocity] = set()
+                        self.backtrack[self.frigate.position+self.frigate.velocity].add(current_time + 1)
+
+                print("Returned from same speed next call, current time is: ", current_time)
+            if not decrease and not t_ring:
+                #restore
+                print("restoring")
+                #print("Restore Parameters are: ", eschaton, frigate, asteroids.asteroid_ring_members)
+                self.frigate.course = self.frigate.course[:current_time]
+                total = 0
+                location = 0
+                for c in self.frigate.course:
+                    total += c
+                    location = location + total
+                self.frigate.position = location
+                self.frigate.velocity = sum(self.frigate.course)
+
+                for id, asteroid in enumerate(self.asteroids.asteroid_ring_members):
+                    asteroid.position = (asteroid.offset + current_time) % asteroid.t_per_asteroid_cycle
+
+                self.eschaton.blast_position = current_time / self.eschaton.t_per_blast_move
+                self.eschaton.t_next_blast = self.eschaton.t_per_blast_move - current_time% self.eschaton.t_per_blast_move
+
+                #if current_time > 0:
+                    #self.update_all_positions()
+                    #print("All positions updated after restore")
+                #print(self.frigate, self.eschaton, self.asteroids.asteroid_ring_members)
+
+                self.frigate.course.append(-1)
+                print("Decelerating: ", self.frigate.position, self.frigate.velocity)
+                ret = self.calculate_course(current_time+1)
+                if len(ret) > 1:
+                    return ret
+                elif len(ret) == 1 and ret[0] == -2:
+                    try:
+                        self.backtrack[self.frigate.position+self.frigate.velocity-1].add(current_time + 1)
+                    except KeyError as e:
+                        self.backtrack[self.frigate.position+self.frigate.velocity-1] = set()
+                        self.backtrack[self.frigate.position+self.frigate.velocity-1].add(current_time + 1)
+                print("Returned from decelerated next call, current time is: ", current_time)
+
+            #raise ValueError("Cannot escape eschaton, Dead because nowhere to go")
+            print("Nowhere to go, return and retry: ", self.frigate.position, self.frigate.velocity)
+            #self.backtrack[self.frigate.position+self.frigate.velocity+1] = current_time
+            #self.backtrack[self.frigate.position+self.frigate.velocity] = current_time
+            #self.backtrack[self.frigate.position+self.frigate.velocity-1] = current_time
+            return [-3]
+
 
 def read_chart():
-    chart_file = open('my-chart.json', 'r')
+    chart_file = open('full-chart.json', 'r')
     chart_data = json.loads(chart_file.read())
     chart_file.close()
     return chart_data
@@ -179,7 +313,7 @@ def rejoin_family():
     navigator = NavigateEscape(eschaton, frigate, asteroids)
 
     #calculate course
-    course = navigator.calculate_course()
+    course = navigator.find_escape_route()
 
     #Elvis has left the building
     return course
